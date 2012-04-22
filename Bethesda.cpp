@@ -24,7 +24,7 @@ void Bethesda::CommandHandler( signed int key, vector<double>& info, double resu
 	if ( !error )
 	{
 #ifdef VAULTMP_DEBUG
-		//debug->PrintFormat("Executing command %04hX on reference %08X", true, opcode, info.size() > 1 ? getFrom<double, unsigned int>(info.at(1)) : 0);
+		//debug->PrintFormat("Executing command %04hX on reference %08X, key %08X", true, opcode, info.size() > 1 ? getFrom<double, unsigned int>(info.at(1)) : 0, key);
 #endif
 
 		Lockable* data = NULL;
@@ -143,6 +143,9 @@ void Bethesda::CommandHandler( signed int key, vector<double>& info, double resu
 				delete data;
 				break;
 			}
+
+			case Fallout::Functions::Func_UIMessage:
+                break;
 
 			case Fallout3::Functions::Func_GetParentCell:
 			case FalloutNV::Functions::Func_GetParentCell:

@@ -7,6 +7,7 @@
 #include "Network.h"
 #include "VaultException.h"
 
+#include <future>
 #include <chrono>
 
 /**
@@ -52,6 +53,12 @@ class Game
 		 */
         template <typename T>
 		static void FutureSet( Lockable* data, T t );
+		/**
+		 * \brief Async task execution
+		 */
+        static void AsyncTasks();
+        template <typename A, typename... Values>
+		static void AsyncTasks( A&& async, Values&&... more );
 
         /**
          * Game functions
@@ -65,6 +72,10 @@ class Game
 		 * \brief Loads the environment after savegame load
 		 */
 		static void LoadEnvironment();
+		/**
+		 * \brief Display a Fallout UI message
+		 */
+		static void UIMessage(string message);
 		/**
 		 * \brief Creates a new Object
 		 */
@@ -199,6 +210,20 @@ class Game
 		 * \brief Network function to handle Actor death
 		 */
 		static void net_SetActorDead( FactoryObject& reference, bool dead );
+
+        /**
+         * Async task functions
+         */
+
+		/**
+		 * \brief SetRestrained async
+		 */
+        static const function<void(NetworkID, bool)> async_SetRestrained;
+
+		/**
+		 * \brief SetAlert async
+		 */
+        static const function<void(NetworkID, signed int)> async_SetActorAlerted;
 
         /**
          * Interface functions

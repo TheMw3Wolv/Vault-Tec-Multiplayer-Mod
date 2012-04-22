@@ -41,6 +41,8 @@ namespace vaultmp
 	static const Index MAX_PLAYER_NAME      =   16;
 	static const Index MAX_PASSWORD_SIZE    =   16;
 
+	static const Interval DEFAULT_PLAYER_RESPAWN    =   8000;
+
 };
 
 extern "C" {
@@ -76,6 +78,8 @@ extern "C" {
 	VAULTSCRIPT std::string ( *AxisToString )( vaultmp::Index );
 	VAULTSCRIPT std::string ( *AnimToString )( vaultmp::Index );
 
+    VAULTSCRIPT void ( *SetRespawn )( vaultmp::Interval );
+
 	VAULTSCRIPT vaultmp::Reference ( *GetReference )( vaultmp::ID );
 	VAULTSCRIPT vaultmp::Base ( *GetBase )( vaultmp::ID );
 	VAULTSCRIPT std::string ( *GetName )( vaultmp::ID );
@@ -96,5 +100,7 @@ extern "C" {
     VAULTSCRIPT void ( *RemoveAllItems )( vaultmp::ID );
 	VAULTSCRIPT void ( *SetActorValue )( vaultmp::ID, vaultmp::Index, vaultmp::Value );
 	VAULTSCRIPT void ( *SetActorBaseValue )( vaultmp::ID, vaultmp::Index, vaultmp::Value );
+
+	VAULTSCRIPT void ( *SetPlayerRespawn )( vaultmp::ID, vaultmp::Interval );
 
 }

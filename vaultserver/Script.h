@@ -78,11 +78,13 @@ class Script
 		static NetworkID CreateTimerEx( ScriptFunc timer, unsigned int interval, string def, ... );
 		static NetworkID CreateTimerPAWN( ScriptFuncPAWN timer, AMX* amx, unsigned int interval );
 		static NetworkID CreateTimerPAWNEx( ScriptFuncPAWN timer, AMX* amx, unsigned int interval, string def, const vector<boost::any>& args );
-		static void KillTimer( NetworkID id );
+		static void KillTimer( NetworkID id = 0 );
 		static void MakePublic( ScriptFunc _public, string name, string def );
 		static void MakePublicPAWN( ScriptFuncPAWN _public, AMX* amx, string name, string def );
 		static unsigned long long CallPublic( string name, ... );
 		static unsigned long long CallPublicPAWN( string name, const vector<boost::any>& args );
+
+        static unsigned long long Timer_Respawn(NetworkID id);
 
         static void OnSpawn( FactoryObject reference );
 		static void OnCellChange( FactoryObject reference, unsigned int cell );
@@ -96,6 +98,8 @@ class Script
 		static void OnPlayerDisconnect( FactoryObject reference, unsigned char reason );
 		static unsigned int OnPlayerRequestGame( FactoryObject reference );
 		static bool OnClientAuthenticate( string name, string pwd );
+
+        static void SetRespawn(unsigned int respawn);
 
 		static unsigned int GetReference( NetworkID id );
 		static unsigned int GetBase( NetworkID id );
@@ -117,6 +121,8 @@ class Script
         static void RemoveAllItems( NetworkID id );
 		static void SetActorValue( NetworkID id, unsigned char index, double value );
 		static void SetActorBaseValue( NetworkID id, unsigned char index, double value );
+
+		static void SetPlayerRespawn( NetworkID id, unsigned int respawn );
 
 };
 

@@ -69,6 +69,7 @@ void Game::Initialize()
     Interface::DefineCommand( "IsAnimPlaying", "%0.IsAnimPlaying %1" );
     Interface::DefineCommand( "MarkForDelete", "%0.MarkForDelete" );
     Interface::DefineCommand( "ScanContainer", "%0.ScanContainer" );
+    Interface::DefineCommand( "UIMessage", "UIMessage %0" );
 
 	Interface::DefineCommand( "GetActorState", "%0.GetActorState %1" );
 	Interface::DefineCommand( "GetActorStateNotSelf", "%0.GetActorState", "GetActorState" );
@@ -183,6 +184,20 @@ void Game::FutureSet( Lockable* data, T t )
 template void Game::FutureSet(Lockable* data, unsigned int t);
 template void Game::FutureSet(Lockable* data, bool t);
 
+void Game::AsyncTasks()
+{
+
+}
+
+template <typename A, typename... Values>
+void Game::AsyncTasks( A&& async, Values&&... more )
+{
+    if (async.second > chrono::milliseconds(0))
+        this_thread::sleep_for(async.second);
+    async.first.wait();
+    AsyncTasks(more...);
+}
+
 void Game::LoadGame( string savegame )
 {
     static string last_savegame;
@@ -224,14 +239,11 @@ void Game::LoadGame( string savegame )
 
 void Game::LoadEnvironment()
 {
-	vector<FactoryObject> reference = GameFactory::GetObjectTypes(ALL_OBJECTS);
-	vector<FactoryObject>::reverse_iterator it;
+	vector<NetworkID> reference = GameFactory::GetIDObjectTypes(ALL_OBJECTS);
 
-    // reverse iteration: prevent concurrency issues due to possible unlock / relock in NewObject
-
-    for (it = reference.rbegin(); it != reference.rend(); GameFactory::LeaveReference(*it), ++it)
+    for (NetworkID& id : reference)
     {
-        FactoryObject& reference = *it;
+        FactoryObject reference = GameFactory::GetObject(id);
 
         if ((*reference)->GetReference() != PLAYER_REFERENCE)
         {
@@ -274,6 +286,17 @@ void Game::LoadEnvironment()
     Interface::EndDynamic();
 }
 
+void Game::UIMessage(string message)
+{
+    Interface::StartDynamic();
+
+    ParamContainer param_UIMessage;
+    param_UIMessage.push_back( BuildParameter( message ) ); // max 64 chars
+    Interface::ExecuteCommand( "UIMessage", param_UIMessage );
+
+    Interface::EndDynamic();
+}
+
 void Game::NewObject( FactoryObject& reference )
 {
 	Object* object = vaultcast<Object>(reference);
@@ -285,6 +308,7 @@ void Game::NewObject( FactoryObject& reference )
 
         PlaceAtMe(PLAYER_REFERENCE, object->GetBase(), 1, key);
 
+        NetworkID id = object->GetNetworkID();
         GameFactory::LeaveReference(reference);
 
         unsigned int refID;
@@ -299,7 +323,7 @@ void Game::NewObject( FactoryObject& reference )
             throw VaultException( "Object creation with baseID %08X and NetworkID %lld failed (%s)", object->GetBase(), object->GetNetworkID(), e.what() );
         }
 
-        reference = GameFactory::GetObject(refID);
+        reference = GameFactory::GetObject(id);
         object = vaultcast<Object>(reference);
 
         object->SetReference(refID);
@@ -311,7 +335,6 @@ void Game::NewObject( FactoryObject& reference )
     }
 
 	SetName( reference );
-	SetRestrained( reference, true );
 	SetPos(reference);
 	SetAngle(reference);
 
@@ -332,41 +355,37 @@ void Game::NewContainer( FactoryObject& reference )
 
     Container* container = vaultcast<Container>(reference);
     vector<FactoryObject> items = GameFactory::GetMultiple(vector<NetworkID>(container->GetItemList().begin(), container->GetItemList().end()));
-    vector<FactoryObject>::iterator it;
 
-    for (it = items.begin(); it != items.end(); ++it)
+    for (FactoryObject& _item : items)
     {
-        AddItem(vector<FactoryObject>{reference, *it});
-        Item* item = vaultcast<Item>(*it);
+        AddItem(vector<FactoryObject>{reference, _item});
+        Item* item = vaultcast<Item>(_item);
 
         if (item->GetItemEquipped())
-            EquipItem(vector<FactoryObject>{reference, *it});
+            EquipItem(vector<FactoryObject>{reference, _item});
     }
 }
 
 void Game::NewActor( FactoryObject& reference )
 {
-    NewObject(reference);
     NewContainer(reference);
 
     vector<unsigned char> values = API::RetrieveAllValues();
-    vector<unsigned char>::iterator it;
 
-    for (it = values.begin(); it != values.end(); ++it)
+    for (unsigned char& value : values)
     {
-        SetActorValue(reference, true, *it);
-        SetActorValue(reference, false, *it);
+        SetActorValue(reference, true, value);
+        SetActorValue(reference, false, value);
     }
 
     SetActorAlerted(reference);
     SetActorSneaking(reference);
     SetActorMovingAnimation(reference);
+	SetRestrained(reference, true);
 }
 
 void Game::NewPlayer( FactoryObject& reference )
 {
-    NewObject(reference);
-    NewContainer(reference);
     NewActor(reference);
 
     // ...
@@ -539,7 +558,7 @@ void Game::SetAngle( FactoryObject reference )
 			AdjustZAngle( value, 45.0 );
 	}
 
-	param_SetAngle.push_back( BuildParameter( object->GetAngle(Axis_Z) ) );
+	param_SetAngle.push_back( BuildParameter( value ) );
 	Interface::ExecuteCommand( "SetAngle", param_SetAngle );
 
 	Interface::EndDynamic();
@@ -879,21 +898,20 @@ void Game::net_ContainerUpdate( FactoryObject reference, ContainerDiff diff )
     signed int key = result->Lock(true);
 
     GameDiff gamediff = container->ApplyDiff(diff);
-    GameDiff::iterator it;
 
-    for (it = gamediff.begin(); it != gamediff.end(); ++it)
+    for (pair<unsigned int, Diff>& diff : gamediff)
     {
-        if (it->second.equipped)
+        if (diff.second.equipped)
         {
-            if (it->second.equipped > 0)
-                EquipItem(reference, it->first, true, true, result->Lock(true));
-            else if (it->second.equipped < 0)
-                UnequipItem(reference, it->first, true, true, result->Lock(true));
+            if (diff.second.equipped > 0)
+                EquipItem(reference, diff.first, true, true, result->Lock(true));
+            else if (diff.second.equipped < 0)
+                UnequipItem(reference, diff.first, true, true, result->Lock(true));
         }
-        else if (it->second.count > 0)
-            AddItem(reference, it->first, it->second.count, it->second.condition, true, result->Lock(true));
-        else if (it->second.count < 0)
-            RemoveItem(reference, it->first, abs(it->second.count), true, result->Lock(true));
+        else if (diff.second.count > 0)
+            AddItem(reference, diff.first, diff.second.count, diff.second.condition, true, result->Lock(true));
+        else if (diff.second.count < 0)
+            RemoveItem(reference, diff.first, abs(diff.second.count), true, result->Lock(true));
         //else
             // new condition, can't handle yet
     }
@@ -939,8 +957,9 @@ void Game::net_SetActorState( FactoryObject reference, unsigned char index, unsi
 	{
 		SetRestrained( reference, false );
 		signed int key = result->Lock( true );
-        SetActorAlerted(reference, key);
-        SetRestrained(reference, true);
+        thread t(AsyncTasks<AsyncPack, AsyncPack>,  AsyncPack(async(launch::deferred, async_SetActorAlerted, actor->GetNetworkID(), key), chrono::milliseconds(20)),
+                                                    AsyncPack(async(launch::deferred, async_SetRestrained, actor->GetNetworkID(), true), chrono::milliseconds(100)));
+        t.detach();
     }
 
 	result = actor->SetActorSneaking( sneaking );
@@ -978,10 +997,8 @@ void Game::net_SetActorDead( FactoryObject& reference, bool dead )
 
     if (result)
     {
-        signed int key = result->Lock(true);
-
         if (dead)
-            KillActor(reference, key);
+            KillActor(reference, result->Lock(true));
         else if (actor->GetReference() != PLAYER_REFERENCE)
         {
             RemoveObject(reference);
@@ -990,12 +1007,39 @@ void Game::net_SetActorDead( FactoryObject& reference, bool dead )
         }
         else
         {
+            NetworkID id = actor->GetNetworkID();
             GameFactory::LeaveReference(reference);
             Game::LoadGame();
             Game::LoadEnvironment();
+
+            pDefault* packet = PacketFactory::CreatePacket( ID_UPDATE_DEAD, id, dead );
+            NetworkResponse response = Network::CompleteResponse( Network::CreateResponse( packet,
+                                       ( unsigned char ) HIGH_PRIORITY,
+                                       ( unsigned char ) RELIABLE_ORDERED,
+                                       CHANNEL_GAME,
+                                       server ) );
+            Network::Queue( response );
         }
     }
 }
+
+const function<void(NetworkID, bool)> Game::async_SetRestrained = [](NetworkID id, bool restrained)
+{
+    try
+    {
+        SetRestrained(GameFactory::GetObject(id), restrained);
+    }
+    catch (...) {}
+};
+
+const function<void(NetworkID, signed int)> Game::async_SetActorAlerted = [](NetworkID id, signed int key)
+{
+    try
+    {
+        SetActorAlerted(GameFactory::GetObject(id), key);
+    }
+    catch (...) {}
+};
 
 void Game::GetPos( FactoryObject reference, unsigned char axis, double value )
 {

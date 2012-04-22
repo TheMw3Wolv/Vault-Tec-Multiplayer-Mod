@@ -3,6 +3,7 @@
 
 #include <string>
 #include <list>
+#include <future>
 #include <vector>
 #include <map>
 
@@ -10,9 +11,32 @@
 #include "RakNet/RakString.h"
 #include "RakNet/MessageIdentifiers.h"
 
+#include "VaultException.h"
 #include "VaultFunctor.h"
 
-#define SAFE_FIND(a,b) ((a.find(b) == a.end()) ? throw VaultException("Value %02X not defined in database", b) : a.find(b))
+template <template<typename K, typename... Values> class T, typename K, typename... Values>
+inline
+static typename T<K, Values...>::iterator SAFE_FIND(T<K, Values...>& a, K b)
+{
+    typename T<K, Values...>::iterator c = a.find(b);
+
+    if (c != a.end())
+        return c;
+
+    throw VaultException("Value %02X not defined in database", b);
+}
+
+template <template<typename K, typename... Values> class T, typename K, typename... Values>
+inline
+static typename T<K, Values...>::const_iterator SAFE_FIND(const T<K, Values...>& a, K b)
+{
+    typename T<K, Values...>::const_iterator c = a.find(b);
+
+    if (c != a.end())
+        return c;
+
+    throw VaultException("Value %02X not defined in database", b);
+}
 
 static const unsigned int PLAYER_REFERENCE  = 0x00000014;
 static const unsigned int PLAYER_BASE       = 0x00000007;
@@ -30,6 +54,7 @@ namespace Data
 	typedef list<Parameter> ParamContainer;
 	typedef const map<const unsigned int, const char*> Database;
 	typedef map<const unsigned char, const unsigned char> IndexLookup;
+	typedef pair<future<void>, chrono::milliseconds> AsyncPack;
 
     template <typename R, typename T>
     inline static R storeIn(T t) { R r; *reinterpret_cast<T*>(&r) = t; return r; }
